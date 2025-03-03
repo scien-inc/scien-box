@@ -12,7 +12,6 @@ from picamera2 import Picamera2
 from libcamera import controls
 import socket
 import base64
-import numpy as np
 
 # ロギングの設定
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -304,14 +303,43 @@ def get_cameras():
 def get_snapshot(node_id):
     # サーバー自身のカメラの場合
     if node_id == NODE_ID:
-        global frame
+        global frame, camera_running
         if frame is None:
             return jsonify({'error': 'No frame available'}), 404
         
         try:
-            # 現在のフレームをJPEGとしてエンコード
-            with frame_lock:
-                ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            # サーバーカメラでも高解像度撮影を試みる
+            if camera_running:
+                try:
+                    # 一時的に高解像度で撮影
+                    camera = Picamera2()
+                    high_res_config = camera.create_still_configuration(main={"size": (2592, 1944)})
+                    camera.configure(high_res_config)
+                    camera.start()
+                    time.sleep(0.5)
+                    high_res_img = camera.capture_array()
+                    camera.stop()
+                    
+                    # 必要に応じてBGRに変換
+                    channels = 1 if len(high_res_img.shape) == 2 else high_res_img.shape[2]
+                    if channels == 1:
+                        high_res_img = cv2.cvtColor(high_res_img, cv2.COLOR_GRAY2BGR)
+                    elif channels == 4:
+                        high_res_img = cv2.cvtColor(high_res_img, cv2.COLOR_BGRA2BGR)
+                    
+                    # 高解像度画像をエンコード
+                    ret, buffer = cv2.imencode('.jpg', high_res_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    
+                    if not ret:
+                        with frame_lock:
+                            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                except Exception as e:
+                    logger.error(f"サーバー高解像度撮影エラー: {e}")
+                    with frame_lock:
+                        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            else:
+                with frame_lock:
+                    ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
             
             if not ret:
                 return jsonify({'error': 'Failed to encode image'}), 500
