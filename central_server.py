@@ -12,6 +12,7 @@ from picamera2 import Picamera2
 from libcamera import controls
 import socket
 import base64
+import numpy as np
 
 # ロギングの設定
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
