@@ -22,7 +22,7 @@ NODE_ID = str(uuid.uuid4())[:8]  # ユニークID
 CENTRAL_SERVER = os.environ.get('CENTRAL_SERVER', 'http://192.168.179.200:5001')  # 中央サーバーのアドレス
 API_PORT = int(os.environ.get('API_PORT', 8000))
 STREAM_QUALITY = int(os.environ.get('STREAM_QUALITY', 70))  # JPEG品質
-RESOLUTION = (1280, 720)  # カメラ解像度
+RESOLUTION = (3000, 2000)  # カメラ解像度
 NODE_IP = os.environ.get('NODE_IP', None)  # 環境変数からノードのIPを取得
 
 # Flaskアプリの初期化
@@ -141,6 +141,11 @@ def generate_frames():
 
 # 中央サーバーへの登録スレッド
 def registration_thread():
+    retry_count = 0
+    retry_delay = 5  # 開始リトライ間隔（秒）
+    max_retry_delay = 60  # 最大リトライ間隔（秒）
+    heartbeat_interval = 30  # 通常のハートビート間隔（秒）
+    
     while True:
         try:
             # ノード情報を更新
@@ -150,20 +155,36 @@ def registration_thread():
             # 中央サーバーに登録
             logger.info(f"中央サーバーに登録を試みます: {CENTRAL_SERVER}/api/register")
             try:
-                response = requests.post(f"{CENTRAL_SERVER}/api/register", json=node_info, timeout=5)
+                response = requests.post(f"{CENTRAL_SERVER}/api/register", json=node_info, timeout=10)
                 logger.info(f"登録リクエスト送信完了。ステータスコード: {response.status_code}")
                 if response.status_code == 200:
                     logger.info(f"中央サーバーへの登録に成功しました: {response.json()}")
+                    # 成功したらリトライカウントとディレイをリセット
+                    retry_count = 0
+                    retry_delay = 5
+                    # 次のハートビートまで通常間隔で待機
+                    time.sleep(heartbeat_interval)
+                    continue
                 else:
                     logger.warning(f"中央サーバーへの登録に失敗しました: {response.status_code}, レスポンス: {response.text}")
+                    retry_count += 1
             except requests.exceptions.RequestException as req_err:
                 logger.error(f"中央サーバーへのリクエスト中にエラーが発生: {req_err}")
+                retry_count += 1
         
         except Exception as e:
             logger.error(f"中央サーバーへの登録エラー: {e}")
+            retry_count += 1
         
-        # 次のハートビートまで待機
-        time.sleep(30)
+        # エラー発生時はバックオフ戦略でリトライ
+        if retry_count > 0:
+            # 指数バックオフ（最大まで）
+            current_delay = min(retry_delay * (2 ** (retry_count - 1)), max_retry_delay)
+            logger.info(f"サーバーへの接続リトライを {current_delay}秒後に行います。(リトライ回数: {retry_count})")
+            time.sleep(current_delay)
+        else:
+            # 通常のハートビート間隔
+            time.sleep(heartbeat_interval)
 
 # --- API エンドポイント ---
 

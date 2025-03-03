@@ -24,14 +24,14 @@ app = Flask(__name__)
 # グローバル変数
 cameras = {}  # カメラノード情報を格納する辞書
 camera_lock = threading.Lock()  # スレッドセーフな操作のためのロック
-HEARTBEAT_TIMEOUT = 60  # ハートビートタイムアウト（秒）
+HEARTBEAT_TIMEOUT = 300  # ハートビートタイムアウト（秒）- 5分に延長
 
 # サーバー設定
 SERVER_PORT = int(os.environ.get('SERVER_PORT', 5001))
 SERVER_IP = os.environ.get('SERVER_IP', '192.168.179.200')
 NODE_ID = str(uuid.uuid4())[:8]  # サーバー自身のユニークID
 NODE_NAME = os.environ.get('SERVER_NODE_NAME', 'server-camera')
-RESOLUTION = (1280, 720)  # カメラ解像度
+RESOLUTION = (3000, 2000)  # カメラ解像度
 
 # ローカルカメラ変数
 frame = None
