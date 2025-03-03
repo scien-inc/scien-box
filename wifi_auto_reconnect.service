@@ -1,0 +1,10 @@
+[Unit]
+Description=Wi-FiAutoReconnectDaemon
+After=NetworkManager-wait-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/pi/wifi_auto_reconnect.sh SCIEN-2G-07C0 60 180
+
+[Install]
+WantedBy=multi-user.target
