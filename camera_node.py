@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 # 設定
 NODE_NAME = os.environ.get('CAMERA_NODE_NAME', f'camera-{socket.gethostname()}')
 NODE_ID = str(uuid.uuid4())[:8]  # ユニークID
-CENTRAL_SERVER = os.environ.get('CENTRAL_SERVER', 'http://192.168.11.36:5001')  # 正しいIPアドレスに更新
+CENTRAL_SERVER = os.environ.get('CENTRAL_SERVER', 'http://192.168.179.200:5001')  # 中央サーバーのアドレス
 API_PORT = int(os.environ.get('API_PORT', 8000))
 STREAM_QUALITY = int(os.environ.get('STREAM_QUALITY', 70))  # JPEG品質
 RESOLUTION = (1280, 720)  # カメラ解像度
+NODE_IP = os.environ.get('NODE_IP', None)  # 環境変数からノードのIPを取得
 
 # Flaskアプリの初期化
 app = Flask(__name__)
@@ -43,6 +44,11 @@ node_info = {
 
 # ローカルIPアドレスを取得する関数
 def get_local_ip():
+    # 環境変数でIPが指定されている場合はそれを使用
+    if NODE_IP:
+        logger.info(f"環境変数から指定されたIPアドレスを使用します: {NODE_IP}")
+        return NODE_IP
+    
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(('8.8.8.8', 80))
