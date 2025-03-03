@@ -12,7 +12,6 @@ from picamera2 import Picamera2
 from libcamera import controls
 import socket
 import base64
-import numpy as np
 
 # ロギングの設定
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -73,10 +72,10 @@ def cleanup_thread():
         try:
             current_time = time.time()
             with camera_lock:
-                # タイムアウトしたノードを特定
+                # タイムアウトしたノードを特定（サーバー自身は除外）
                 timed_out_nodes = [
                     node_id for node_id, info in cameras.items()
-                    if current_time - info.get('last_heartbeat', 0) > HEARTBEAT_TIMEOUT
+                    if (current_time - info.get('last_heartbeat', 0) > HEARTBEAT_TIMEOUT) and (node_id != NODE_ID)
                 ]
                 
                 # タイムアウトしたノードを削除
@@ -84,8 +83,16 @@ def cleanup_thread():
                     logger.info(f"ノード {node_id} ({cameras[node_id].get('name', 'unknown')}) がタイムアウトしました")
                     cameras.pop(node_id, None)
                 
-                # 各ノードのステータスを更新
+                # サーバー自身のハートビートを更新
+                if NODE_ID in cameras:
+                    cameras[NODE_ID]['last_heartbeat'] = current_time
+                    cameras[NODE_ID]['status'] = 'running' if camera_running else 'error'
+                
+                # 各ノードのステータスを更新（サーバー自身は除外）
                 for node_id, info in list(cameras.items()):
+                    if node_id == NODE_ID:
+                        continue  # サーバー自身はスキップ
+                        
                     # 30秒ごとにヘルスチェック
                     if current_time - info.get('last_checked', 0) > 30:
                         try:
@@ -203,6 +210,34 @@ def register_server_camera():
         cameras[NODE_ID] = server_info
         logger.info(f"サーバー自身をカメラノードとして登録しました: {NODE_ID}")
 
+# サーバー自身のカメラステータスを更新するスレッド
+def server_camera_status_thread():
+    global camera_running, frame
+    
+    logger.info("サーバーカメラステータス監視スレッドを開始しました")
+    
+    while True:
+        try:
+            with camera_lock:
+                if NODE_ID in cameras:
+                    # カメラが動作しているか確認
+                    if frame is None:
+                        camera_running = False
+                        cameras[NODE_ID]['status'] = 'error'
+                    else:
+                        with frame_lock:
+                            if frame is not None:
+                                camera_running = True
+                                cameras[NODE_ID]['status'] = 'running'
+                    
+                    # ハートビートを更新
+                    cameras[NODE_ID]['last_heartbeat'] = time.time()
+                    cameras[NODE_ID]['last_checked'] = time.time()
+        except Exception as e:
+            logger.error(f"サーバーカメラステータス更新エラー: {e}")
+        
+        time.sleep(10)
+
 # --- APIエンドポイント ---
 
 # カメラノードの登録/ハートビート
@@ -306,6 +341,26 @@ def get_snapshot(node_id):
 # サーバーカメラのストリーム
 @app.route('/stream')
 def video_stream():
+    global camera_running, frame
+    
+    # カメラが動作していることを確認
+    if not camera_running or frame is None:
+        # カメラが動作していない場合、オフライン画像を返す
+        try:
+            with open('static/offline.jpg', 'rb') as f:
+                offline_image = f.read()
+                
+            # 単一フレームのMJPEGとして返す
+            def generate_offline():
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + offline_image + b'\r\n')
+                
+            return Response(generate_offline(),
+                           mimetype='multipart/x-mixed-replace; boundary=frame')
+        except:
+            pass
+    
+    # 通常のストリームを返す
     return Response(generate_frames(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
