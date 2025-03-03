@@ -92,27 +92,38 @@ def cleanup_thread():
 # カメラノードの登録/ハートビート
 @app.route('/api/register', methods=['POST'])
 def register_camera():
-    node_info = request.json
-    node_id = node_info.get('id')
+    logger.info(f"カメラ登録リクエストを受信しました: {request.remote_addr}")
+    try:
+        node_info = request.json
+        logger.info(f"登録データ: {node_info}")
+        node_id = node_info.get('id')
+        
+        if not node_id:
+            logger.error("Node IDがリクエストに含まれていません")
+            return jsonify({'error': 'Node ID is required'}), 400
+        
+        # タイムスタンプを更新
+        node_info['last_heartbeat'] = time.time()
+        
+        # ノード情報を保存/更新
+        with camera_lock:
+            if node_id in cameras:
+                # 既存のノードを更新
+                cameras[node_id].update(node_info)
+                logger.info(f"ノード {node_id} ({node_info.get('name')}) のハートビートを受信しました")
+            else:
+                # 新しいノードを登録
+                cameras[node_id] = node_info
+                logger.info(f"新しいノード {node_id} ({node_info.get('name')}) を登録しました")
+            
+            # デバッグ用：現在登録されているすべてのカメラを表示
+            logger.info(f"現在登録されているカメラ: {list(cameras.keys())}")
+        
+        return jsonify({'status': 'registered', 'id': node_id})
     
-    if not node_id:
-        return jsonify({'error': 'Node ID is required'}), 400
-    
-    # タイムスタンプを更新
-    node_info['last_heartbeat'] = time.time()
-    
-    # ノード情報を保存/更新
-    with camera_lock:
-        if node_id in cameras:
-            # 既存のノードを更新
-            cameras[node_id].update(node_info)
-            logger.info(f"ノード {node_id} ({node_info.get('name')}) のハートビートを受信しました")
-        else:
-            # 新しいノードを登録
-            cameras[node_id] = node_info
-            logger.info(f"新しいノード {node_id} ({node_info.get('name')}) を登録しました")
-    
-    return jsonify({'status': 'registered', 'id': node_id})
+    except Exception as e:
+        logger.error(f"カメラ登録処理中にエラーが発生しました: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 # すべてのカメラノード情報を取得
 @app.route('/api/cameras', methods=['GET'])
@@ -164,5 +175,6 @@ if __name__ == '__main__':
     cleanup_thread.start()
     
     # サーバーの開始
-    logger.info("中央サーバーを開始します: http://0.0.0.0:5000")
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    PORT = int(os.environ.get('SERVER_PORT', 5001))  # デフォルトを5001に変更
+    logger.info(f"中央サーバーを開始します: http://0.0.0.0:{PORT}")
+    app.run(host='0.0.0.0', port=PORT, threaded=True)

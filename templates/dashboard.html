@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>カメラ監視システム</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f7;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        h1 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .button {
+            background-color: #007aff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .button:hover {
+            background-color: #0056b3;
+        }
+        
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .camera-card {
+            background-color: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .camera-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background-color: #f7f7f7;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .camera-title {
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-running {
+            background-color: #34c759;
+        }
+        
+        .status-error, .status-unreachable {
+            background-color: #ff3b30;
+        }
+        
+        .status-initializing {
+            background-color: #ffcc00;
+        }
+        
+        .camera-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .camera-actions button {
+            background-color: #f2f2f2;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .camera-actions button:hover {
+            background-color: #e5e5e5;
+        }
+        
+        .camera-stream {
+            width: 100%;
+            height: 300px;
+            background-color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .camera-stream img {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+        }
+        
+        .camera-info {
+            padding: 10px 15px;
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .camera-info p {
+            margin: 5px 0;
+        }
+        
+        .loading {
+            color: white;
+            font-size: 14px;
+        }
+        
+        .placeholder {
+            text-align: center;
+            padding: 20px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* モーダル用のスタイル */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 12px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            position: relative;
+            padding: 20px;
+        }
+        
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .snapshot-img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .error-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        
+        /* iPadに最適化 */
+        @media (max-width: 1024px) {
+            .camera-grid {
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            }
+            
+            .container {
+                padding: 10px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .camera-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .camera-stream {
+                height: 250px;
+            }
+            
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .controls {
+                margin-top: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>カメラ監視システム</h1>
+            <div class="controls">
+                <button id="refresh-btn" class="button">更新</button>
+                <button id="grid-toggle-btn" class="button">グリッド切替</button>
+            </div>
+        </header>
+        
+        <div id="camera-grid" class="camera-grid">
+            <div class="placeholder">
+                <p>カメラを読み込み中...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- スナップショットモーダル -->
+    <div id="snapshot-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="close-modal">&times;</span>
+            <h2 id="snapshot-title">スナップショット</h2>
+            <img id="snapshot-img" class="snapshot-img" src="" alt="スナップショット">
+        </div>
+    </div>
+    
+    <script>
+        // DOM要素の取得
+        const cameraGrid = document.getElementById('camera-grid');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const gridToggleBtn = document.getElementById('grid-toggle-btn');
+        const snapshotModal = document.getElementById('snapshot-modal');
+        const closeModalBtn = document.getElementById('close-modal');
+        const snapshotImg = document.getElementById('snapshot-img');
+        const snapshotTitle = document.getElementById('snapshot-title');
+        
+        // カメラリスト
+        let cameras = {};
+        
+        // グリッド列数
+        let gridColumns = 'auto-fill';
+        
+        // カメラ情報を取得する関数
+        async function fetchCameras() {
+            try {
+                const response = await fetch('/api/cameras');
+                if (!response.ok) {
+                    throw new Error('サーバーからのレスポンスエラー');
+                }
+                
+                cameras = await response.json();
+                renderCameraGrid();
+            } catch (error) {
+                console.error('カメラ情報取得エラー:', error);
+                cameraGrid.innerHTML = `
+                    <div class="placeholder">
+                        <p>カメラ情報の取得に失敗しました。</p>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // カメラグリッドを描画する関数
+        function renderCameraGrid() {
+            const cameraCount = Object.keys(cameras).length;
+            
+            if (cameraCount === 0) {
+                cameraGrid.innerHTML = `
+                    <div class="placeholder">
+                        <p>カメラが見つかりません。</p>
+                        <p>カメラノードを起動して、このサーバーに接続してください。</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let gridHTML = '';
+            
+            for (const [nodeId, camera] of Object.entries(cameras)) {
+                gridHTML += `
+                    <div class="camera-card" data-id="${nodeId}">
+                        <div class="camera-header">
+                            <h3 class="camera-title">
+                                <span class="status-indicator status-${camera.status}"></span>
+                                ${camera.name}
+                            </h3>
+                            <div class="camera-actions">
+                                <button class="refresh-stream-btn" data-id="${nodeId}">リフレッシュ</button>
+                                <button class="snapshot-btn" data-id="${nodeId}">スナップショット</button>
+                            </div>
+                        </div>
+                        <div class="camera-stream" id="stream-${nodeId}">
+                            <div class="loading">読み込み中...</div>
+                            ${camera.status === 'running' 
+                                ? `<img src="${camera.url}" alt="${camera.name}" onerror="handleStreamError('${nodeId}')">`
+                                : `<div class="error-overlay">カメラ接続エラー</div>`
+                            }
+                        </div>
+                        <div class="camera-info">
+                            <p><strong>ID:</strong> ${nodeId}</p>
+                            <p><strong>ステータス:</strong> ${getStatusText(camera.status)}</p>
+                            <p><strong>解像度:</strong> ${camera.resolution ? camera.resolution.join(' x ') : '不明'}</p>
+                            <p><strong>最終確認:</strong> ${camera.last_seen}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            cameraGrid.innerHTML = gridHTML;
+            
+            // イベントリスナーを追加
+            document.querySelectorAll('.refresh-stream-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const nodeId = e.target.dataset.id;
+                    refreshStream(nodeId);
+                });
+            });
+            
+            document.querySelectorAll('.snapshot-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const nodeId = e.target.dataset.id;
+                    takeSnapshot(nodeId);
+                });
+            });
+        }
+        
+        // ストリームをリフレッシュする関数
+        function refreshStream(nodeId) {
+            if (!cameras[nodeId]) return;
+            
+            const streamContainer = document.getElementById(`stream-${nodeId}`);
+            const camera = cameras[nodeId];
+            
+            if (camera.status === 'running') {
+                streamContainer.innerHTML = `
+                    <div class="loading">読み込み中...</div>
+                    <img src="${camera.url}?t=${new Date().getTime()}" alt="${camera.name}" 
+                         onerror="handleStreamError('${nodeId}')">
+                `;
+            }
+        }
+        
+        // スナップショットを取得する関数
+        async function takeSnapshot(nodeId) {
+            if (!cameras[nodeId]) return;
+            
+            try {
+                const response = await fetch(`/api/snapshot/${nodeId}`);
+                if (!response.ok) {
+                    throw new Error('スナップショット取得エラー');
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.image) {
+                    // スナップショットをモーダルに表示
+                    snapshotTitle.textContent = `スナップショット: ${cameras[nodeId].name}`;
+                    snapshotImg.src = `data:image/jpeg;base64,${data.image}`;
+                    snapshotModal.style.display = 'flex';
+                } else {
+                    alert('スナップショット取得エラー: ' + (data.error || '不明なエラー'));
+                }
+            } catch (error) {
+                console.error('スナップショットエラー:', error);
+                alert('スナップショット取得エラー: ' + error.message);
+            }
+        }
+        
+        // ストリームエラーを処理する関数
+        function handleStreamError(nodeId) {
+            if (!cameras[nodeId]) return;
+            
+            const streamContainer = document.getElementById(`stream-${nodeId}`);
+            
+            if (streamContainer) {
+                streamContainer.innerHTML = `
+                    <div class="error-overlay">
+                        ストリーム読み込みエラー
+                        <button class="button" onclick="refreshStream('${nodeId}')">
+                            再試行
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        // ステータスのテキストを取得する関数
+        function getStatusText(status) {
+            switch (status) {
+                case 'running': return '正常';
+                case 'error': return 'エラー';
+                case 'initializing': return '初期化中';
+                case 'unreachable': return '接続不可';
+                default: return status;
+            }
+        }
+        
+        // グリッドの列数を切り替える関数
+        function toggleGridColumns() {
+            if (gridColumns === 'auto-fill') {
+                gridColumns = '1';
+                cameraGrid.style.gridTemplateColumns = '1fr';
+            } else {
+                gridColumns = 'auto-fill';
+                cameraGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(450px, 1fr))';
+            }
+        }
+        
+        // イベントリスナー
+        refreshBtn.addEventListener('click', fetchCameras);
+        gridToggleBtn.addEventListener('click', toggleGridColumns);
+        
+        // モーダルを閉じる
+        closeModalBtn.addEventListener('click', () => {
+            snapshotModal.style.display = 'none';
+        });
+        
+        // モーダル外をクリックして閉じる
+        snapshotModal.addEventListener('click', (e) => {
+            if (e.target === snapshotModal) {
+                snapshotModal.style.display = 'none';
+            }
+        });
+        
+        // ページロード時にカメラ情報を取得
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchCameras();
+            
+            // 1分ごとに自動更新
+            setInterval(fetchCameras, 60000);
+        });
+    </script>
+</body>
+</html>
