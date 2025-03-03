@@ -22,7 +22,7 @@ NODE_ID = str(uuid.uuid4())[:8]  # ユニークID
 CENTRAL_SERVER = os.environ.get('CENTRAL_SERVER', 'http://192.168.179.200:5001')  # 中央サーバーのアドレス
 API_PORT = int(os.environ.get('API_PORT', 8000))
 STREAM_QUALITY = int(os.environ.get('STREAM_QUALITY', 70))  # JPEG品質
-RESOLUTION = (1280, 720)  # カメラ解像度
+RESOLUTION = (3000, 2000)  # カメラ解像度
 NODE_IP = os.environ.get('NODE_IP', None)  # 環境変数からノードのIPを取得
 
 # Flaskアプリの初期化
